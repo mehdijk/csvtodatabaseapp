@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:file="http://www.mulesoft.org/schema/mule/file"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="
+          http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+          http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <file:config name="File_Config" doc:name="File Config" doc:id="19b4e457-3d10-4997-9c24-731448e03850" />
+
+    <flow name="read-csv-flow">
+        <!-- File Listener to Monitor the Directory for New CSV Files -->
+        <file:listener doc:name="On New File" config-ref="File_Config" outputMimeType='application/csv; separator=";"' 
+                       directory="${app.home}/input_csv" moveToDirectory="${app.home}/processed_csv">
+            <scheduling-strategy>
+                <fixed-frequency frequency="60" timeUnit="SECONDS" startDelay="30"/>
+            </scheduling-strategy>
+        </file:listener>
+
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+input payload application/csv separator=';', header=true
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+ "mail": payload01.mail,
+ "cognome": payload01.cognome,
+ "indirizzo": payload01.indirizzo,
+ "nome": payload01.nome
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <foreach doc:name="Process Each User">
+            
+            <logger level="INFO" message="Calling API with: #[payload]" />
+			<http:request method="POST" doc:name="Request" doc:id="29d239b9-be23-4e37-9d22-62937ed8ff43" path="users" config-ref="HTTP_Request_Config">
+				<http:response-validator >
+					<http:success-status-code-validator values="201" />
+				</http:response-validator>
+			</http:request>
+        
+</foreach>
+		<logger level="INFO" message="The CSV file has been transformed into the database successfully!" />
+    
+</flow>
+
+    <http:request-config name="HTTP_Request_Config"    doc:name="HTTP Request Configuration" basePath="/api">
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config>
+</mule>
